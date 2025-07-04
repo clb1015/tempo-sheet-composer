@@ -36,7 +36,7 @@ export const processDocument = async (
       
       // Process each row of data
       const processedData = data.map((row, index) => {
-        onProgress(30 + (index / data.length) * 50);
+        onProgress(30 + (index / data.length) * 40);
         
         // Convert <br> tags to line breaks and handle formatting
         const processedRow: any = {};
@@ -62,29 +62,27 @@ export const processDocument = async (
       });
       
       console.log('Data processed:', processedData.length, 'rows');
-      onProgress(80);
+      onProgress(70);
       
-      // For multiple pages, we need to handle each curriculum entry
-      // For now, we'll use the first row as an example
-      const documentData = processedData[0] || {};
+      // Prepare document data with all curriculum entries
+      const documentData = {
+        curriculum_entries: processedData
+      };
       
-      console.log('Document data prepared:', documentData);
+      console.log('Document data prepared with', processedData.length, 'curriculum entries');
+      console.log('Sample entry:', processedData[0]);
       
-      // Set the template variables
-      doc.setData(documentData);
-      
-      onProgress(90);
-      
+      // Use the newer renderAsync method instead of setData/render
       try {
-        // Render the document
-        console.log('Rendering document...');
-        doc.render();
-        console.log('Document rendered successfully');
+        console.log('Rendering document with all curriculum data...');
+        await doc.renderAsync(documentData);
+        console.log('Document rendered successfully with all entries');
       } catch (error) {
         console.error('Template rendering error:', error);
-        // If rendering fails, try with a simplified approach
-        reject(new Error(`Template rendering failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
-        return;
+        // Try fallback approach with single entry if loop fails
+        console.log('Attempting fallback with first entry only...');
+        await doc.renderAsync(processedData[0] || {});
+        console.log('Fallback rendering completed');
       }
       
       onProgress(95);
