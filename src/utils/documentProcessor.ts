@@ -21,81 +21,86 @@ export const processDocument = async (
       const templateArrayBuffer = await templateFile.arrayBuffer();
       console.log('Template file read successfully, size:', templateArrayBuffer.byteLength);
       
-      const zip = new PizZip(templateArrayBuffer);
-      
       onProgress(20);
       
+      // Process all rows of data
+      const processedData = data.map((row, index) => {
+        console.log(`Processing row ${index + 1}/${data.length}`);
+        const processedRow: any = {};
+        
+        Object.keys(row).forEach(key => {
+          let value = String(row[key] || '');
+          
+          // Handle <br> tags - convert to line breaks
+          if (value.includes('<br>')) {
+            const parts = value.split('<br>').filter(part => part.trim());
+            if (parts.length > 1) {
+              // Create bullet points for multiple items
+              value = parts.map(part => `• ${part.trim()}`).join('\n');
+            } else {
+              value = value.replace(/<br>/g, '\n');
+            }
+          }
+          
+          processedRow[key] = value;
+        });
+        
+        return processedRow;
+      });
+      
+      console.log('All data processed:', {
+        totalRows: processedData.length,
+        sampleKeys: Object.keys(processedData[0] || {}),
+        firstRowSample: {
+          course_title: processedData[0]?.course_title,
+          unit_title: processedData[0]?.unit_title
+        }
+      });
+      
+      onProgress(40);
+      
+      // Create the template data structure for multiple entries
+      const templateData = {
+        curricula: processedData
+      };
+      
+      console.log('Template data structure created:', {
+        curricula_count: templateData.curricula.length
+      });
+      
+      onProgress(50);
+      
       // Create docxtemplater instance
+      const zip = new PizZip(templateArrayBuffer);
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true,
       });
       
       console.log('Docxtemplater instance created');
-      onProgress(30);
-      
-      // Process the first row of data to understand structure
-      const firstRow = data[0] || {};
-      console.log('First row keys:', Object.keys(firstRow));
-      console.log('First row sample values:', {
-        course_title: firstRow.course_title,
-        unit_title: firstRow.unit_title,
-        standards_benchmarks: firstRow.standards_benchmarks
-      });
-      
-      // Convert <br> tags to line breaks for the first row
-      const processedRow: any = {};
-      Object.keys(firstRow).forEach(key => {
-        let value = String(firstRow[key] || '');
-        
-        // Handle <br> tags - convert to line breaks
-        if (value.includes('<br>')) {
-          const parts = value.split('<br>').filter(part => part.trim());
-          if (parts.length > 1) {
-            // Create bullet points for multiple items
-            value = parts.map(part => `• ${part.trim()}`).join('\n');
-          } else {
-            value = value.replace(/<br>/g, '\n');
-          }
-        }
-        
-        processedRow[key] = value;
-      });
-      
-      console.log('Processed row keys:', Object.keys(processedRow));
-      console.log('Processed row sample:', {
-        course_title: processedRow.course_title,
-        unit_title: processedRow.unit_title,
-        standards_benchmarks: processedRow.standards_benchmarks
-      });
-      
-      onProgress(50);
-      
-      // Try the simplest approach first - just use the first row data directly
-      console.log('Setting template data with processed row...');
+      onProgress(60);
       
       try {
-        // Use setData and render (older but more reliable method)
-        doc.setData(processedRow);
-        console.log('Data set successfully on template');
+        // Try the modern approach first
+        console.log('Attempting to render with template data...');
+        doc.render(templateData);
+        console.log('Document rendered successfully with modern approach');
+      } catch (modernError) {
+        console.log('Modern approach failed, trying compatibility mode...');
+        console.error('Modern render error:', modernError);
         
-        onProgress(70);
-        
-        console.log('Rendering document...');
-        doc.render();
-        console.log('Document rendered successfully');
-        
-      } catch (renderError) {
-        console.error('Rendering failed:', renderError);
-        console.log('Template tags found in document:', doc.getFullText ? doc.getFullText() : 'Cannot read template content');
-        
-        // Log the exact error details
-        if (renderError instanceof Error) {
-          console.error('Render error message:', renderError.message);
-          console.error('Render error stack:', renderError.stack);
+        // Fallback: try with individual data if template expects single variables
+        try {
+          // If template uses simple variables instead of loops, use first row
+          doc.render(processedData[0] || {});
+          console.log('Document rendered with fallback approach (first row only)');
+        } catch (fallbackError) {
+          console.error('Both rendering approaches failed');
+          console.error('Modern error:', modernError);
+          console.error('Fallback error:', fallbackError);
+          
+          throw new Error(`Template rendering failed. Modern approach: ${modernError instanceof Error ? modernError.message : 'Unknown error'}. Fallback approach: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
         }
-        
-        throw new Error(`Template rendering failed: ${renderError instanceof Error ? renderError.message : 'Unknown rendering error'}`);
       }
       
       onProgress(90);
@@ -107,7 +112,11 @@ export const processDocument = async (
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
       
-      console.log('Document generated successfully, blob size:', output.size);
+      console.log('Document generated successfully', {
+        blobSize: output.size,
+        processedRows: processedData.length
+      });
+      
       onProgress(100);
       resolve(output);
       
