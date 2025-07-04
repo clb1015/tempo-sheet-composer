@@ -44,15 +44,24 @@ const Index = () => {
     setGenerationProgress(0);
     
     try {
+      console.log('Starting document generation...', {
+        templateFile: templateFile.name,
+        dataRows: spreadsheetData.length
+      });
+      
       // Import the document processor
       const { processDocument } = await import('@/utils/documentProcessor');
       
       const result = await processDocument(
         templateFile, 
         spreadsheetData,
-        (progress) => setGenerationProgress(progress)
+        (progress) => {
+          console.log('Generation progress:', progress);
+          setGenerationProgress(progress);
+        }
       );
       
+      console.log('Document generated successfully', result);
       setGeneratedFile(result);
       setStep(4);
       toast({
@@ -72,15 +81,36 @@ const Index = () => {
   };
 
   const handleDownload = () => {
-    if (!generatedFile) return;
+    if (!generatedFile) {
+      console.error('No generated file available for download');
+      return;
+    }
     
-    const { saveAs } = require('file-saver');
-    saveAs(generatedFile, 'Generated_Curriculum.docx');
+    console.log('Starting download...', generatedFile);
     
-    toast({
-      title: "Download started",
-      description: "Your curriculum document is being downloaded.",
-    });
+    try {
+      // Create download link
+      const url = URL.createObjectURL(generatedFile);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Generated_Curriculum.docx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Download started",
+        description: "Your curriculum document is being downloaded.",
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "There was an error downloading the file.",
+        variant: "destructive",
+      });
+    }
   };
 
   const canProceed = (currentStep: number) => {
@@ -108,7 +138,7 @@ const Index = () => {
         <div className="flex justify-center mb-8">
           <div className="flex items-center space-x-4">
             {[1, 2, 3, 4].map((stepNum) => (
-              <React.Fragment key={stepNum}>
+              <div key={stepNum} className="flex items-center">
                 <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
                   step >= stepNum 
                     ? 'bg-blue-600 text-white' 
@@ -117,11 +147,11 @@ const Index = () => {
                   {step > stepNum ? <CheckCircle className="w-6 h-6" /> : stepNum}
                 </div>
                 {stepNum < 4 && (
-                  <div className={`w-16 h-1 ${
+                  <div className={`w-16 h-1 ml-4 ${
                     step > stepNum ? 'bg-blue-600' : 'bg-gray-200'
                   }`} />
                 )}
-              </React.Fragment>
+              </div>
             ))}
           </div>
         </div>
@@ -141,7 +171,7 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 <FileUpload
-                  accept=".docx"
+                  accept="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   onFileSelect={handleTemplateUpload}
                   icon={<FileText className="w-12 h-12 text-blue-500" />}
                   title="Drop your DOCX template here"
@@ -169,7 +199,7 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 <FileUpload
-                  accept=".xlsx,.xls,.csv"
+                  accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                   onFileSelect={(file) => {
                     // This will be handled by the component
                   }}
@@ -253,6 +283,7 @@ const Index = () => {
                   onClick={handleDownload} 
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
                   size="lg"
+                  disabled={!generatedFile}
                 >
                   <Download className="w-5 h-5 mr-2" />
                   Download Curriculum Document
@@ -265,6 +296,7 @@ const Index = () => {
                     setSpreadsheetFile(null);
                     setSpreadsheetData([]);
                     setGeneratedFile(null);
+                    setGenerationProgress(0);
                   }} 
                   variant="outline"
                   className="w-full"

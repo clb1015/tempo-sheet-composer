@@ -38,6 +38,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
           
+          console.log('Processed spreadsheet data:', jsonData);
+          
           // Validate required columns
           const requiredColumns = [
             'course_title', 'unit_title', 'standards_benchmarks', 'concepts_content',
@@ -48,7 +50,11 @@ const FileUpload: React.FC<FileUploadProps> = ({
           
           if (jsonData.length > 0) {
             const firstRow = jsonData[0] as any;
+            const availableColumns = Object.keys(firstRow);
             const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+            
+            console.log('Available columns:', availableColumns);
+            console.log('Missing columns:', missingColumns);
             
             if (missingColumns.length > 0) {
               reject(new Error(`Missing required columns: ${missingColumns.join(', ')}`));
@@ -58,6 +64,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
           
           resolve(jsonData);
         } catch (error) {
+          console.error('Spreadsheet processing error:', error);
           reject(error);
         }
       };
@@ -71,6 +78,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     const file = acceptedFiles[0];
     if (!file) return;
 
+    console.log('File dropped:', file.name, file.type);
     setError(null);
     setIsProcessing(true);
 
@@ -90,12 +98,22 @@ const FileUpload: React.FC<FileUploadProps> = ({
     }
   }, [onFileSelect, onDataLoad]);
 
+  // Convert MIME types string to proper format for react-dropzone
+  const acceptObject = accept.split(',').reduce((acc, type) => {
+    const trimmedType = type.trim();
+    if (trimmedType.startsWith('.')) {
+      // Handle file extensions by converting to proper MIME types
+      acc[trimmedType] = [];
+    } else {
+      // Handle MIME types directly
+      acc[trimmedType] = [];
+    }
+    return acc;
+  }, {} as Record<string, string[]>);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: accept.split(',').reduce((acc, type) => {
-      acc[type.trim()] = [];
-      return acc;
-    }, {} as Record<string, string[]>),
+    accept: acceptObject,
     maxFiles: 1,
     disabled: isProcessing
   });
